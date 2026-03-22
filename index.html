@@ -460,11 +460,11 @@
             if (diff >= 0) {
                 summaryCard.className = "rounded-2xl p-6 shadow-lg flex flex-col justify-between relative overflow-hidden text-white bg-gradient-to-br from-emerald-500 to-teal-600 transform hover:-translate-y-1 transition-all duration-300";
                 summaryDiff.innerText = `+${currencyFormatter.format(diff)}`;
-                summaryBadge.innerHTML = `<div class="inline-flex items-center gap-1.5 px-3 py-1 bg-white/25 border border-white/40 text-white rounded-lg text-sm font-bold shadow-sm backdrop-blur-sm mt-1"><i class="fa-solid fa-check text-base"></i> บรรลุเป้าหมาย</div>`;
+                summaryBadge.innerHTML = `<div class="inline-flex items-center gap-1.5 px-3 py-1 bg-white/25 border border-white/40 text-white rounded-lg text-sm font-bold shadow-sm backdrop-blur-sm mt-1">บรรลุเป้าหมาย</div>`;
             } else {
                 summaryCard.className = "rounded-2xl p-6 shadow-lg flex flex-col justify-between relative overflow-hidden text-white bg-gradient-to-br from-rose-500 to-red-600 transform hover:-translate-y-1 transition-all duration-300";
                 summaryDiff.innerText = `${currencyFormatter.format(diff)}`; 
-                summaryBadge.innerHTML = `<div class="inline-flex items-center gap-1.5 px-3 py-1 bg-white/25 border border-white/40 text-white rounded-lg text-sm font-bold shadow-sm backdrop-blur-sm mt-1"><i class="fa-solid fa-xmark text-base"></i> ไม่บรรลุเป้าหมาย</div>`;
+                summaryBadge.innerHTML = `<div class="inline-flex items-center gap-1.5 px-3 py-1 bg-white/25 border border-white/40 text-white rounded-lg text-sm font-bold shadow-sm backdrop-blur-sm mt-1">ไม่บรรลุเป้าหมาย</div>`;
             }
 
             document.getElementById('kpiMonthsPassed').innerText = targetPassedCount;
@@ -533,7 +533,7 @@
                     const isPassed = row.total >= TARGET_MONTHLY;
                     statusHtml = isPassed 
                         ? `<div class="inline-flex items-center px-3 py-1 bg-emerald-50 text-emerald-600 rounded-full text-xs font-bold border border-emerald-100 shadow-sm whitespace-nowrap">บรรลุเป้าหมาย</div>`
-                        : `<div class="inline-flex items-center px-3 py-1 bg-rose-50 text-rose-600 rounded-full text-xs font-bold border border-rose-100 shadow-sm whitespace-nowrap">ไม่บรรลุเป้าหมาย</div>`;
+                        : `<div class="inline-flex items-center px-3 py-1 bg-rose-50 text-red-800 rounded-full text-xs font-bold border border-rose-100 shadow-sm whitespace-nowrap">ไม่บรรลุเป้าหมาย</div>`;
                     totalStr = currencyFormatter.format(row.total);
                 } else {
                     statusHtml = `<span class="text-slate-300">-</span>`;
@@ -557,7 +557,7 @@
             const isGrandTotalPassed = grandTotal >= cumulativeTarget;
             const footStatusHtml = isGrandTotalPassed
                 ? `<div class="inline-flex items-center px-3 py-1 bg-emerald-100 text-emerald-700 rounded-full text-sm font-bold shadow-sm border border-emerald-200 whitespace-nowrap">บรรลุเป้าหมาย</div>`
-                : `<div class="inline-flex items-center px-3 py-1 bg-rose-100 text-rose-700 rounded-full text-sm font-bold shadow-sm border border-rose-200 whitespace-nowrap">ไม่บรรลุเป้าหมาย</div>`;
+                : `<div class="inline-flex items-center px-3 py-1 bg-rose-100 text-red-800 rounded-full text-sm font-bold shadow-sm border border-rose-200 whitespace-nowrap">ไม่บรรลุเป้าหมาย</div>`;
 
             let footHtml = `<tr><td class="px-4 py-4 text-center font-bold whitespace-nowrap">รวมสะสม</td>`;
             sourceTotals.forEach(val => {
