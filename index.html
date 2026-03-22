@@ -1,0 +1,718 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ระบบติดตามรายรับค่ารักษาพยาบาล - รพ.กุสุมาลย์</title>
+    
+    <!-- Google Fonts: Sarabun -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
+    
+    <!-- PapaParse for CSV parsing -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+
+    <!-- FontAwesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Sarabun', 'sans-serif'],
+                    },
+                    colors: {
+                        primary: '#059669', // Emerald 600 (Green theme)
+                        secondary: '#10b981', // Emerald 500
+                        dark: '#1e293b',
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body {
+            background-color: #f8fafc;
+        }
+        /* Custom scrollbar for table */
+        .table-container::-webkit-scrollbar {
+            height: 8px;
+            width: 8px;
+        }
+        .table-container::-webkit-scrollbar-track {
+            background: #f1f1f1; 
+            border-radius: 4px;
+        }
+        .table-container::-webkit-scrollbar-thumb {
+            background: #cbd5e1; 
+            border-radius: 4px;
+        }
+        .table-container::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8; 
+        }
+        .loader {
+            border-top-color: #059669; 
+            -webkit-animation: spinner 1.5s linear infinite;
+            animation: spinner 1.5s linear infinite;
+        }
+        @keyframes spinner {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="text-slate-800 antialiased font-sans">
+
+    <!-- Navbar / Header -->
+    <nav class="bg-white shadow-sm border-b border-slate-200 sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex justify-between h-20">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0 flex items-center gap-3">
+                        <div class="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center text-primary">
+                            <i class="fa-solid fa-file-invoice-dollar text-2xl"></i>
+                        </div>
+                        <div>
+                            <h1 class="text-2xl font-bold text-slate-800 leading-tight">ระบบติดตามรายรับค่ารักษาพยาบาล</h1>
+                            <p class="text-sm text-slate-500">โรงพยาบาลกุสุมาลย์ จังหวัดสกลนคร | ปีงบประมาณ 2569</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="flex items-center">
+                    <div class="bg-slate-50 border border-slate-100 px-4 py-2 rounded-lg flex items-center gap-2 shadow-sm">
+                        <i class="fa-regular fa-clock text-emerald-600"></i>
+                        <span id="lastUpdated" class="text-sm text-slate-600 font-medium">อัปเดตล่าสุด: กำลังโหลด...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        
+        <!-- Loading Overlay -->
+        <div id="loadingState" class="fixed inset-0 bg-white/80 z-40 flex flex-col items-center justify-center backdrop-blur-sm">
+            <div class="loader ease-linear rounded-full border-4 border-slate-200 h-16 w-16 mb-4"></div>
+            <h2 class="text-xl font-semibold text-slate-700">กรุณารอสักครู่</h2>
+        </div>
+
+        <!-- Error Message -->
+        <div id="errorMessage" class="hidden bg-red-50 border border-red-200 text-red-700 px-6 py-4 rounded-xl mb-8 flex items-start gap-3 shadow-sm">
+            <i class="fa-solid fa-triangle-exclamation mt-1"></i>
+            <div>
+                <h3 class="font-bold">เกิดข้อผิดพลาดในการโหลดข้อมูล</h3>
+                <p id="errorText" class="text-sm mt-1">โปรดตรวจสอบ URL ของ Google Sheet หรือการตั้งค่าการแชร์ (ต้องเผยแพร่ทางเว็บเป็น CSV)</p>
+            </div>
+        </div>
+
+        <!-- Target Overview Banner Card -->
+        <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 mb-6 flex flex-col md:flex-row items-start md:items-center gap-5 relative overflow-hidden">
+            <div class="absolute -right-10 -top-10 w-40 h-40 bg-blue-50/50 rounded-full pointer-events-none"></div>
+            
+            <div class="w-14 h-14 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center border border-blue-100 shadow-sm flex-shrink-0 relative z-10">
+                <i class="fa-solid fa-bullseye text-3xl"></i>
+            </div>
+            
+            <div class="relative z-10 flex-1">
+                <h2 class="text-base font-bold text-slate-800 mb-1.5">เป้าหมายรายรับ 2.8 ล้านบาทต่อเดือน เพื่อให้ครอบคลุมค่าใช้จ่าย Fix Cost ด้านบุคลากร</h2>
+                <div class="flex flex-wrap gap-2.5">
+                    <span class="inline-flex items-center px-2.5 py-1 bg-indigo-50 text-indigo-700 rounded-lg text-xs font-semibold border border-indigo-100 shadow-sm">
+                        <i class="fa-solid fa-clock mr-1.5 opacity-70"></i> ค่าตอบแทน OT เฉลี่ย 1.2 ล้านบาท
+                    </span>
+                    <span class="inline-flex items-center px-2.5 py-1 bg-fuchsia-50 text-fuchsia-700 rounded-lg text-xs font-semibold border border-fuchsia-100 shadow-sm">
+                        <i class="fa-solid fa-user-doctor mr-1.5 opacity-70"></i> ค่าตอบแทน ฉ. 11 เฉลี่ย 6 แสนบาท
+                    </span>
+                    <span class="inline-flex items-center px-2.5 py-1 bg-amber-50 text-amber-700 rounded-lg text-xs font-semibold border border-amber-100 shadow-sm">
+                        <i class="fa-solid fa-users mr-1.5 opacity-70"></i> เงินเดือนลูกจ้าง เฉลี่ย 1 ล้านบาท
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <!-- KPI Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <!-- Card 1: Total Revenue -->
+            <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 flex flex-col justify-between relative overflow-hidden group">
+                <div class="absolute -right-6 -top-6 w-24 h-24 bg-emerald-50 rounded-full group-hover:scale-110 transition-transform duration-500"></div>
+                <div class="relative z-10">
+                    <div class="flex items-center gap-3 mb-2">
+                        <div class="w-8 h-8 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center">
+                            <i class="fa-solid fa-sack-dollar text-sm"></i>
+                        </div>
+                        <h3 id="kpiTotalMonthsTitle" class="text-sm font-medium text-slate-500">รายรับสะสม (...)</h3>
+                    </div>
+                    <p class="text-3xl font-bold text-slate-800 tracking-tight">
+                        <span id="kpiTotalRevenue">0.00</span>
+                        <span class="text-base text-slate-500 font-normal ml-1">บาท</span>
+                    </p>
+                    <div class="mt-3 pt-3 border-t border-slate-100">
+                        <div id="kpiYtdDiff" class="text-sm font-medium">กำลังคำนวณ...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Card 2: Avg Monthly Revenue -->
+            <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 flex flex-col justify-between relative overflow-hidden group">
+                <div class="absolute -right-6 -top-6 w-24 h-24 bg-teal-50 rounded-full group-hover:scale-110 transition-transform duration-500"></div>
+                <div class="relative z-10">
+                    <div class="flex items-center gap-3 mb-2">
+                        <div class="w-8 h-8 rounded-full bg-teal-100 text-teal-600 flex items-center justify-center">
+                            <i class="fa-solid fa-chart-line text-sm"></i>
+                        </div>
+                        <h3 class="text-sm font-medium text-slate-500">รายรับเฉลี่ยต่อเดือน</h3>
+                    </div>
+                    <p class="text-3xl font-bold text-slate-800 tracking-tight">
+                        <span id="kpiAvgRevenue">0.00</span>
+                        <span class="text-base text-slate-500 font-normal ml-1">บาท</span>
+                    </p>
+                    <div class="mt-3 pt-3 border-t border-slate-100">
+                        <div id="kpiAvgDiff" class="text-sm font-medium">กำลังคำนวณ...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Card 3: Months Passed Target -->
+            <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 flex flex-col justify-between relative overflow-hidden group">
+                <div class="absolute -right-6 -top-6 w-24 h-24 bg-lime-50 rounded-full group-hover:scale-110 transition-transform duration-500"></div>
+                <div class="relative z-10">
+                    <div class="flex items-center gap-3 mb-2">
+                        <div class="w-8 h-8 rounded-full bg-lime-100 text-lime-600 flex items-center justify-center">
+                            <i class="fa-solid fa-trophy text-sm"></i>
+                        </div>
+                        <h3 class="text-sm font-medium text-slate-500">จำนวนเดือนที่บรรลุเป้าหมาย</h3>
+                    </div>
+                    <p class="text-3xl font-bold text-slate-800"><span id="kpiMonthsPassed">0</span> <span class="text-lg text-slate-500 font-normal">/ <span id="kpiTotalMonths">0</span> เดือน</span></p>
+                    <div class="w-full bg-slate-100 rounded-full h-1.5 mt-3">
+                        <div id="kpiProgress" class="bg-lime-500 h-1.5 rounded-full" style="width: 0%"></div>
+                    </div>
+                    <div class="mt-3 pt-3 border-t border-slate-100">
+                        <p id="kpiFailedMonthsText" class="text-sm text-slate-500 mb-1">ไม่บรรลุเป้าหมาย 0 เดือน ได้แก่</p>
+                        <div id="kpiFailedMonths" class="inline-block px-2.5 py-1 bg-rose-50 border border-rose-100 text-rose-700 text-sm font-bold rounded-md mt-1">-</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Card 4: Summary -->
+            <div id="kpiSummaryCard" class="rounded-2xl p-6 shadow-lg flex flex-col justify-between relative overflow-hidden text-white bg-slate-800 transition-all duration-500 transform hover:-translate-y-1">
+                <div class="absolute right-0 top-0 w-32 h-32 bg-white/10 rounded-full blur-2xl -mr-10 -mt-10"></div>
+                <div class="relative z-10">
+                    <div class="flex items-center gap-3 mb-2">
+                        <div class="w-8 h-8 rounded-full bg-white/20 text-white flex items-center justify-center backdrop-blur-sm shadow-sm">
+                            <i class="fa-solid fa-wallet text-sm"></i>
+                        </div>
+                        <h3 id="kpiSummaryTitle" class="text-sm font-medium text-white/90">สรุปภาพรวมรายรับสะสม</h3>
+                    </div>
+                    <p class="text-3xl font-bold tracking-tight mt-2">
+                        <span id="kpiSummaryDiff">0.00</span>
+                        <span class="text-base text-white/80 font-normal ml-1">บาท</span>
+                    </p>
+                    <div class="mt-3 pt-3 border-t border-white/20 flex flex-col gap-2">
+                        <p class="text-sm text-white/90">เป้าหมาย <span id="kpiSummaryMonths">0</span> เดือน <span id="kpiSummaryTarget">0.00</span> ลบ.</p>
+                        <div id="kpiSummaryBadge"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts Section -->
+        <div class="mb-8">
+            <!-- Main Trend Chart -->
+            <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 w-full">
+                <div class="flex justify-between items-start mb-6">
+                    <div class="flex items-center gap-4">
+                        <div class="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center border border-emerald-100 shadow-sm flex-shrink-0">
+                            <i class="fa-solid fa-chart-column text-xl"></i>
+                        </div>
+                        <div>
+                            <h3 class="text-lg font-bold text-slate-800">แนวโน้มรายรับค่ารักษาพยาบาล</h3>
+                            <p class="text-sm text-slate-500">เป้าหมาย 2.8 ล้านบาทต่อเดือน เพื่อให้ครอบคลุมค่าใช้จ่าย Fix Cost ด้านบุคลากร</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="relative h-80 w-full">
+                    <canvas id="trendChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Data Table Section -->
+        <div class="mb-8">
+            <!-- Data Table -->
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden flex flex-col">
+                <div class="p-6 border-b border-slate-100 flex justify-between items-center bg-white">
+                    <div class="flex items-center gap-4">
+                        <div class="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center border border-emerald-100 shadow-sm flex-shrink-0">
+                            <i class="fa-solid fa-table-list text-xl"></i>
+                        </div>
+                        <div>
+                            <h3 class="text-lg font-bold text-slate-800">รายละเอียดรายรับค่ารักษาพยาบาล</h3>
+                            <p class="text-sm text-slate-500">จำแนกตามสิทธิการรักษา</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="table-container overflow-x-auto overflow-y-hidden p-0">
+                    <table class="w-full text-sm text-left">
+                        <thead class="text-xs text-slate-600 bg-slate-50 uppercase font-bold border-b border-slate-200" id="tableHead">
+                            <!-- Headers dynamically generated -->
+                        </thead>
+                        <tbody id="tableBody" class="divide-y divide-slate-100">
+                            <!-- Rows dynamically generated -->
+                        </tbody>
+                        <tfoot id="tableFoot" class="bg-slate-50 font-bold text-slate-800 border-t-2 border-slate-200">
+                            <!-- Footer generated dynamically -->
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Footer -->
+        <footer class="mt-4 text-center text-sm text-slate-500 pb-4">
+            <p>&copy; 2026 โรงพยาบาลกุสุมาลย์ จังหวัดสกลนคร</p>
+        </footer>
+
+    </main>
+
+    <script>
+        // --- Configuration ---
+        const TARGET_MONTHLY = 2800000; // 2.8 Million
+        const CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQB1tXq6ddW6XYPP7nFkXRGF4LlnkoGzgn6he9urRdJ_2npbYC_crB82ilNZcBFVkEV8bZ-oQ_-awDL/pub?gid=0&single=true&output=csv';
+        
+        // Month Abbreviations for FY2026
+        const shortMonths = ['ต.ค. 68', 'พ.ย. 68', 'ธ.ค. 68', 'ม.ค. 69', 'ก.พ. 69', 'มี.ค. 69', 'เม.ย. 69', 'พ.ค. 69', 'มิ.ย. 69', 'ก.ค. 69', 'ส.ค. 69', 'ก.ย. 69'];
+
+        // Chart Instances
+        let trendChartInstance = null;
+
+        // Formatters
+        const currencyFormatter = new Intl.NumberFormat('th-TH', { style: 'decimal', minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        const currencyCompact = new Intl.NumberFormat('th-TH', { notation: "compact", compactDisplay: "short" });
+        
+        // Helper to parse numbers safely
+        const parseNum = (val) => {
+            if (val === null || val === undefined) return 0;
+            if (typeof val === 'number') return val;
+            const cleanStr = String(val).replace(/,/g, '').replace(/บาท/g, '').trim();
+            const num = parseFloat(cleanStr);
+            return isNaN(num) ? 0 : num;
+        };
+
+        // Initialize fetching
+        document.addEventListener('DOMContentLoaded', fetchData);
+
+        function fetchData() {
+            // Show Loader
+            document.getElementById('loadingState').classList.remove('hidden');
+            document.getElementById('errorMessage').classList.add('hidden');
+            
+            // Update time
+            const now = new Date();
+            const dateStr = now.toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric' });
+            const timeStr = now.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
+            document.getElementById('lastUpdated').innerText = `อัปเดตล่าสุด: ${dateStr} เวลา ${timeStr} น.`;
+
+            Papa.parse(CSV_URL, {
+                download: true,
+                header: true,
+                skipEmptyLines: true,
+                complete: function(results) {
+                    try {
+                        processData(results.data);
+                        document.getElementById('loadingState').classList.add('hidden');
+                    } catch (error) {
+                        console.error("Data processing error:", error);
+                        showError("รูปแบบข้อมูลใน Sheet ไม่ถูกต้อง หรือประมวลผลล้มเหลว");
+                    }
+                },
+                error: function(err) {
+                    console.error("PapaParse error:", err);
+                    showError("ไม่สามารถเชื่อมต่อกับ Google Sheet ได้ โปรดตรวจสอบ URL");
+                }
+            });
+        }
+
+        function showError(msg) {
+            document.getElementById('loadingState').classList.add('hidden');
+            const errDiv = document.getElementById('errorMessage');
+            errDiv.classList.remove('hidden');
+            document.getElementById('errorText').innerText = msg;
+        }
+
+        function processData(data) {
+            if (!data || data.length === 0) {
+                showError("ไม่พบข้อมูลใน Sheet");
+                return;
+            }
+
+            const headers = Object.keys(data[0]);
+            const monthHeader = headers[0];
+            const sourceHeaders = headers.slice(1);
+
+            let grandTotal = 0;
+            let targetPassedCount = 0;
+            let failedMonths = [];
+            
+            // Clean all possible data rows from CSV
+            const validDataRows = data.filter(row => {
+                const m = row[monthHeader];
+                return m && String(m).trim() !== '' && String(m).indexOf('รวม') === -1;
+            });
+
+            // Prepare Full 12-Month Array for Chart (including zeros)
+            const fullYearData = shortMonths.map((monthName, index) => {
+                const csvRow = validDataRows[index];
+                let rowTotal = 0;
+                let sources = [];
+                
+                if (csvRow) {
+                    sourceHeaders.forEach(src => {
+                        const val = parseNum(csvRow[src]);
+                        sources.push(val);
+                        rowTotal += val;
+                    });
+                } else {
+                    sources = new Array(sourceHeaders.length).fill(0);
+                }
+
+                return { 
+                    month: monthName,
+                    sources: sources, 
+                    total: rowTotal 
+                };
+            });
+
+            // Filter out months with NO data for KPIs and Table as requested previously
+            const activeData = fullYearData.filter(row => row.total > 0);
+
+            if (activeData.length === 0) {
+                showError("ไม่พบข้อมูลรายรับที่มีตัวเลขใน Sheet");
+                return;
+            }
+
+            activeData.forEach(row => {
+                grandTotal += row.total;
+                if (row.total >= TARGET_MONTHLY) {
+                    targetPassedCount++;
+                } else {
+                    failedMonths.push(row.month);
+                }
+            });
+
+            const activeMonthsCount = activeData.length;
+            const avgMonthly = grandTotal / activeMonthsCount;
+            const cumulativeTarget = activeMonthsCount * TARGET_MONTHLY;
+            const diff = grandTotal - cumulativeTarget;
+
+            // Update KPIs
+            document.getElementById('kpiTotalMonthsTitle').innerText = `รายรับสะสม (${activeMonthsCount} เดือน)`;
+            document.getElementById('kpiTotalRevenue').innerText = currencyFormatter.format(grandTotal);
+            
+            const diffElement = document.getElementById('kpiYtdDiff');
+            const targetInMillions = (cumulativeTarget / 1000000).toFixed(2);
+            if (diff >= 0) {
+                diffElement.innerHTML = `
+                    <div class="mb-1.5"><span class="text-emerald-600"><i class="fa-solid fa-arrow-trend-up mr-1"></i>+${currencyFormatter.format(diff)} บาท</span> <span class="text-slate-500 font-normal">เป้า ${targetInMillions} ลบ.</span></div>
+                    <div class="inline-flex items-center gap-1.5 text-xs font-semibold px-2 py-1 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-700"><i class="fa-solid fa-check"></i> บรรลุเป้าหมาย</div>
+                `;
+            } else {
+                diffElement.innerHTML = `
+                    <div class="mb-1.5"><span class="text-rose-600"><i class="fa-solid fa-arrow-trend-down mr-1"></i>${currencyFormatter.format(diff)} บาท</span> <span class="text-slate-500 font-normal">เป้า ${targetInMillions} ลบ.</span></div>
+                    <div class="inline-flex items-center gap-1.5 text-xs font-semibold px-2 py-1 rounded-md bg-rose-50 border border-rose-200 text-rose-700"><i class="fa-solid fa-xmark"></i> ไม่บรรลุเป้าหมาย</div>
+                `;
+            }
+
+            document.getElementById('kpiAvgRevenue').innerText = currencyFormatter.format(avgMonthly);
+            
+            const avgDiff = avgMonthly - TARGET_MONTHLY;
+            const avgDiffElement = document.getElementById('kpiAvgDiff');
+            if (avgDiff >= 0) {
+                avgDiffElement.innerHTML = `
+                    <div class="mb-1.5"><span class="text-emerald-600"><i class="fa-solid fa-arrow-trend-up mr-1"></i>+${currencyFormatter.format(avgDiff)} บาท</span> <span class="text-slate-500 font-normal">เป้า 2.8 ลบ.</span></div>
+                    <div class="inline-flex items-center gap-1.5 text-xs font-semibold px-2 py-1 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-700"><i class="fa-solid fa-check"></i> บรรลุเป้าหมาย</div>
+                `;
+            } else {
+                avgDiffElement.innerHTML = `
+                    <div class="mb-1.5"><span class="text-rose-600"><i class="fa-solid fa-arrow-trend-down mr-1"></i>${currencyFormatter.format(avgDiff)} บาท</span> <span class="text-slate-500 font-normal">เป้า 2.8 ลบ.</span></div>
+                    <div class="inline-flex items-center gap-1.5 text-xs font-semibold px-2 py-1 rounded-md bg-rose-50 border border-rose-200 text-rose-700"><i class="fa-solid fa-xmark"></i> ไม่บรรลุเป้าหมาย</div>
+                `;
+            }
+
+            const summaryCard = document.getElementById('kpiSummaryCard');
+            const summaryDiff = document.getElementById('kpiSummaryDiff');
+            const summaryTarget = document.getElementById('kpiSummaryTarget');
+            const summaryBadge = document.getElementById('kpiSummaryBadge');
+            const summaryMonths = document.getElementById('kpiSummaryMonths');
+            
+            summaryTarget.innerText = targetInMillions;
+            if (summaryMonths) summaryMonths.innerText = activeMonthsCount;
+            
+            if (diff >= 0) {
+                summaryCard.className = "rounded-2xl p-6 shadow-lg flex flex-col justify-between relative overflow-hidden text-white bg-gradient-to-br from-emerald-500 to-teal-600 transform hover:-translate-y-1 transition-all duration-300";
+                summaryDiff.innerText = `+${currencyFormatter.format(diff)}`;
+                summaryBadge.innerHTML = `<div class="inline-flex items-center gap-1.5 px-3 py-1 bg-white/25 border border-white/40 text-white rounded-lg text-sm font-bold shadow-sm backdrop-blur-sm mt-1"><i class="fa-solid fa-check text-base"></i> บรรลุเป้าหมาย</div>`;
+            } else {
+                summaryCard.className = "rounded-2xl p-6 shadow-lg flex flex-col justify-between relative overflow-hidden text-white bg-gradient-to-br from-rose-500 to-red-600 transform hover:-translate-y-1 transition-all duration-300";
+                summaryDiff.innerText = `${currencyFormatter.format(diff)}`; 
+                summaryBadge.innerHTML = `<div class="inline-flex items-center gap-1.5 px-3 py-1 bg-white/25 border border-white/40 text-white rounded-lg text-sm font-bold shadow-sm backdrop-blur-sm mt-1"><i class="fa-solid fa-xmark text-base"></i> ไม่บรรลุเป้าหมาย</div>`;
+            }
+
+            document.getElementById('kpiMonthsPassed').innerText = targetPassedCount;
+            document.getElementById('kpiTotalMonths').innerText = activeMonthsCount;
+            document.getElementById('kpiProgress').style.width = `${(targetPassedCount / activeMonthsCount) * 100}%`;
+            
+            const kpiFailedMonthsEl = document.getElementById('kpiFailedMonths');
+            const kpiFailedMonthsTextEl = document.getElementById('kpiFailedMonthsText');
+            
+            if (failedMonths.length > 0) {
+                kpiFailedMonthsTextEl.innerText = `ไม่บรรลุเป้าหมาย ${failedMonths.length} เดือน ได้แก่`;
+                kpiFailedMonthsEl.innerText = failedMonths.join(', ');
+                kpiFailedMonthsEl.className = "inline-block px-2.5 py-1 bg-rose-50 border border-rose-100 text-rose-700 text-sm font-bold rounded-md mt-1";
+            } else {
+                kpiFailedMonthsTextEl.innerText = `ไม่บรรลุเป้าหมาย 0 เดือน ได้แก่`;
+                kpiFailedMonthsEl.innerText = "ไม่มี";
+                kpiFailedMonthsEl.className = "inline-block px-2.5 py-1 bg-slate-50 border border-slate-200 text-slate-600 text-sm font-bold rounded-md mt-1";
+            }
+
+            let sourceTotalsFinal = new Array(sourceHeaders.length).fill(0);
+            activeData.forEach(row => {
+                row.sources.forEach((val, idx) => {
+                    sourceTotalsFinal[idx] += val;
+                });
+            });
+
+            // Update Table with FULL 12-Month Data
+            updateTable(fullYearData, sourceHeaders, sourceTotalsFinal, grandTotal, cumulativeTarget);
+            
+            // Update Chart with FULL 12-Month Data
+            renderTrendChart(shortMonths, fullYearData.map(r => r.total));
+        }
+
+        function updateTable(dataRows, sourceHeaders, sourceTotals, grandTotal, cumulativeTarget) {
+            const tHead = document.getElementById('tableHead');
+            const tBody = document.getElementById('tableBody');
+            const tFoot = document.getElementById('tableFoot');
+
+            const headerDisplayName = (name) => {
+                const n = name.toLowerCase();
+                if (n.includes("กรมบัญชีกลาง")) return "กรมบัญชีกลาง";
+                if (n.includes("อปท.") || n.includes("กทม") || n.includes("พัทยา")) return "อปท./กทม./พัทยา";
+                if (n.includes("ประกันสังคม")) return "ประกันสังคม";
+                if (n.includes("uc") && n.includes("ผู้ป่วยใน")) return "UC ผู้ป่วยใน";
+                if (n.includes("ชำระเงินเอง")) return "ชำระเงินเอง<br>พรบ. (เรียกเก็บ)";
+                return name;
+            };
+
+            // สร้างหัวตาราง (ตรึงไว้ด้านบนด้วย sticky top-0 และใส่สีพื้นหลังกันข้อมูลซ้อนทับ)
+            let headHtml = `<tr><th class="px-4 py-4 text-center whitespace-nowrap bg-slate-50 border-b border-slate-200 sticky top-0 z-10">เดือน</th>`;
+            sourceHeaders.forEach(src => {
+                const label = headerDisplayName(src);
+                headHtml += `<th class="px-3 py-4 text-right whitespace-nowrap leading-relaxed bg-slate-50 border-b border-slate-200 sticky top-0 z-10">${label}</th>`;
+            });
+            headHtml += `<th class="px-4 py-4 text-center bg-slate-100 border-b border-slate-200 whitespace-nowrap sticky top-0 z-10">รวมรายรับ</th><th class="px-4 py-4 text-center whitespace-nowrap bg-slate-50 border-b border-slate-200 sticky top-0 z-10">ผลลัพธ์</th></tr>`;
+            tHead.innerHTML = headHtml;
+
+            let bodyHtml = '';
+            dataRows.forEach(row => {
+                const hasData = row.total > 0;
+                
+                let statusHtml = '';
+                let totalStr = '';
+                
+                if (hasData) {
+                    const isPassed = row.total >= TARGET_MONTHLY;
+                    statusHtml = isPassed 
+                        ? `<div class="inline-flex items-center px-3 py-1 bg-emerald-50 text-emerald-600 rounded-full text-xs font-bold border border-emerald-100 shadow-sm whitespace-nowrap">บรรลุเป้าหมาย</div>`
+                        : `<div class="inline-flex items-center px-3 py-1 bg-rose-50 text-rose-600 rounded-full text-xs font-bold border border-rose-100 shadow-sm whitespace-nowrap">ไม่บรรลุเป้าหมาย</div>`;
+                    totalStr = currencyFormatter.format(row.total);
+                } else {
+                    statusHtml = `<span class="text-slate-300">-</span>`;
+                    totalStr = `<span class="text-slate-300">-</span>`;
+                }
+                
+                bodyHtml += `<tr class="hover:bg-slate-50 transition-colors">
+                    <td class="px-4 py-4 font-medium text-slate-800 text-center whitespace-nowrap">${row.month}</td>`;
+                
+                row.sources.forEach(val => {
+                    const valStr = hasData ? currencyFormatter.format(val) : `<span class="text-slate-300">-</span>`;
+                    bodyHtml += `<td class="px-3 py-4 text-right text-slate-600 whitespace-nowrap">${valStr}</td>`;
+                });
+                
+                bodyHtml += `<td class="px-4 py-4 text-right font-bold text-slate-800 bg-slate-50/30 whitespace-nowrap">${totalStr}</td>
+                    <td class="px-4 py-4 text-center whitespace-nowrap">${statusHtml}</td>
+                </tr>`;
+            });
+            tBody.innerHTML = bodyHtml;
+
+            const isGrandTotalPassed = grandTotal >= cumulativeTarget;
+            const footStatusHtml = isGrandTotalPassed
+                ? `<div class="inline-flex items-center px-3 py-1 bg-emerald-100 text-emerald-700 rounded-full text-sm font-bold shadow-sm border border-emerald-200 whitespace-nowrap">บรรลุเป้าหมาย</div>`
+                : `<div class="inline-flex items-center px-3 py-1 bg-rose-100 text-rose-700 rounded-full text-sm font-bold shadow-sm border border-rose-200 whitespace-nowrap">ไม่บรรลุเป้าหมาย</div>`;
+
+            let footHtml = `<tr><td class="px-4 py-4 text-center font-bold whitespace-nowrap">รวมสะสม</td>`;
+            sourceTotals.forEach(val => {
+                footHtml += `<td class="px-3 py-4 text-right font-bold whitespace-nowrap">${currencyFormatter.format(val)}</td>`;
+            });
+            footHtml += `<td class="px-4 py-4 text-right text-slate-800 font-bold bg-slate-100/80 whitespace-nowrap">${currencyFormatter.format(grandTotal)}</td>
+                         <td class="px-4 py-4 text-center bg-slate-100/50 whitespace-nowrap">${footStatusHtml}</td></tr>`;
+            tFoot.innerHTML = footHtml;
+        }
+
+        function renderTrendChart(labels, data) {
+            const ctx = document.getElementById('trendChart').getContext('2d');
+            
+            if (trendChartInstance) {
+                trendChartInstance.destroy();
+            }
+
+            Chart.register(ChartDataLabels);
+
+            const targetData = new Array(labels.length).fill(TARGET_MONTHLY);
+
+            trendChartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'เป้าหมายรายรับ (2.8M)',
+                            data: targetData,
+                            type: 'line',
+                            borderColor: '#ef4444', 
+                            borderWidth: 2,
+                            borderDash: [5, 5],
+                            pointRadius: 0,
+                            fill: false,
+                            tension: 0.4
+                        },
+                        {
+                            label: 'รายรับจริง',
+                            type: 'bar', 
+                            data: data,
+                            backgroundColor: data.map(val => val >= TARGET_MONTHLY ? 'rgba(16, 185, 129, 0.85)' : 'rgba(244, 63, 94, 0.85)'),
+                            hoverBackgroundColor: data.map(val => val >= TARGET_MONTHLY ? '#059669' : '#e11d48'),
+                            borderRadius: 6,
+                            barPercentage: 0.85, 
+                            categoryPercentage: 0.9
+                        }
+                    ]
+                },
+                plugins: [{
+                    id: 'customMixedLabels',
+                    afterDatasetsDraw(chart) {
+                        const ctx = chart.ctx;
+                        
+                        // --- ส่วนที่เพิ่มใหม่: วาดตัวอักษร 2.8 ลบ. บนเส้นเป้าหมายด้านขวาสุด ---
+                        const lineMeta = chart.getDatasetMeta(0); // ชุดข้อมูลเส้นเป้าหมาย (index 0)
+                        if (!lineMeta.hidden && lineMeta.data.length > 0) {
+                            const lastPoint = lineMeta.data[lineMeta.data.length - 1];
+                            ctx.save();
+                            ctx.font = 'bold 14px Sarabun, sans-serif';
+                            ctx.fillStyle = '#991b1b'; // เปลี่ยนเป็นสีแดงเข้ม (red-800)
+                            ctx.textAlign = 'right';
+                            ctx.textBaseline = 'bottom';
+                            // วางข้อความชิดขวาสุดของพื้นที่กราฟ และอยู่เหนือเส้นเล็กน้อย
+                            ctx.fillText('2.8 ลบ.', chart.chartArea.right, lastPoint.y - 6);
+                            ctx.restore();
+                        }
+                        // ----------------------------------------------------
+
+                        const meta = chart.getDatasetMeta(1); // ชุดข้อมูลแท่งกราฟ (index 1)
+                        
+                        if (!meta.hidden) {
+                            meta.data.forEach((element, index) => {
+                                const value = chart.data.datasets[1].data[index];
+                                // แสดงตัวเลขกำกับ เฉพาะเดือนที่มีข้อมูล (ค่ามากกว่า 0)
+                                if (value > 0) {
+                                    const numText = (value / 1000000).toFixed(1);
+                                    const unitText = ' ลบ.';
+                                    
+                                    ctx.save();
+                                    const numFont = 'bold 18px Sarabun, sans-serif';
+                                    const unitFont = 'bold 14px Sarabun, sans-serif';
+                                    
+                                    ctx.font = numFont;
+                                    const numWidth = ctx.measureText(numText).width;
+                                    ctx.font = unitFont;
+                                    const unitWidth = ctx.measureText(unitText).width;
+                                    
+                                    const totalWidth = numWidth + unitWidth;
+                                    const startX = element.x - (totalWidth / 2);
+                                    const yPos = element.y - 12; 
+                                    
+                                    ctx.textBaseline = 'bottom';
+                                    ctx.textAlign = 'left';
+                                    
+                                    ctx.font = numFont;
+                                    ctx.fillStyle = '#1e293b'; 
+                                    ctx.fillText(numText, startX, yPos);
+                                    
+                                    ctx.font = unitFont;
+                                    ctx.fillStyle = '#1e293b'; 
+                                    ctx.fillText(unitText, startX + numWidth, yPos - 1); 
+                                    
+                                    ctx.restore();
+                                }
+                            });
+                        }
+                    }
+                }],
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    layout: {
+                        padding: {
+                            top: 60 
+                        }
+                    },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            titleFont: { family: 'Sarabun' },
+                            bodyFont: { family: 'Sarabun' },
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.dataset.label || '';
+                                    if (label) { label += ': '; }
+                                    if (context.parsed.y !== null) {
+                                        label += currencyFormatter.format(context.parsed.y) + ' บาท';
+                                    }
+                                    return label;
+                                }
+                            }
+                        },
+                        datalabels: { display: false }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            grid: { color: '#f1f5f9' },
+                            ticks: { display: false },
+                            border: { display: false }
+                        },
+                        x: {
+                            grid: { display: false },
+                            ticks: {
+                                font: { family: 'Sarabun', size: 13, weight: '500' },
+                                color: '#64748b'
+                            },
+                            border: { display: false }
+                        }
+                    }
+                }
+            });
+        }
+
+    </script>
+</body>
+</html>
